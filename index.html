@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TACTICAL THERMAL OSINT // DUAL UPLINK</title>
+    <style>
+        :root {
+            --bg-color: #03060a;
+            --panel-bg: #070e17;
+            --primary: #00f0ff;
+            --primary-dim: rgba(0, 240, 255, 0.3);
+            --accent: #ffab00;
+            --danger: #ff003c;
+            --text-main: #e0f8ff;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: 
+                linear-gradient(var(--primary-dim) 1px, transparent 1px),
+                linear-gradient(90deg, var(--primary-dim) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center center;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 1400px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        .header h2 {
+            margin: 0;
+            color: var(--primary);
+            font-size: 24px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px var(--primary-dim);
+        }
+        .sys-time { color: var(--accent); font-size: 14px; }
+
+        .main-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: stretch;
+            gap: 20px;
+            width: 100%;
+            max-width: 1400px; 
+            flex-wrap: wrap; 
+        }
+        
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--primary-dim);
+            padding: 20px;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.05);
+        }
+        
+        .panel::before, .panel::after {
+            content: ''; position: absolute; width: 15px; height: 15px; border-color: var(--primary); border-style: solid;
+        }
+        .panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+        .panel::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+        .scale-panel { display: flex; flex-direction: row; align-items: center; gap: 15px; }
+        .scale-labels { display: flex; flex-direction: column; justify-content: space-between; height: 720px; font-weight: bold; font-size: 14px; color: var(--primary); }
+        #legendCanvas { width: 20px; height: 720px; border: 1px solid var(--primary); }
+
+        .video-panel { display: flex; flex-direction: column; align-items: center; padding: 10px; flex-grow: 1; }
+        
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 720px;
+            aspect-ratio: 1 / 1;
+            border: 1px solid var(--primary);
+            background-color: #000;
+            cursor: crosshair;
+        }
+        #thermalCanvas {
+            width: 100%;
+            height: 100%;
+            image-rendering: auto; 
+            transition: transform 0.2s;
+        }
+        
+        .scanlines {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none; z-index: 5;
+        }
+
+        #targetReadout {
+            position: absolute; display: none; color: var(--primary); font-size: 14px; font-weight: bold;
+            background: rgba(0, 0, 0, 0.85); border: 1px solid var(--primary); padding: 6px 10px;
+            pointer-events: none; z-index: 10; text-shadow: 0 0 5px var(--primary); transform: translate(15px, 15px);
+        }
+        
+        .ch-line { position: absolute; background-color: rgba(0, 240, 255, 0.5); pointer-events: none; z-index: 8; display: none; }
+        #ch-h { height: 1px; width: 100%; left: 0; }
+        #ch-v { width: 1px; height: 100%; top: 0; }
+
+        .uplink-controls {
+            display: flex;
+            width: 100%;
+            max-width: 720px;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .controls-panel { display: flex; flex-direction: column; width: 280px; gap: 15px; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; border-bottom: 1px dashed var(--primary-dim); padding-bottom: 10px; }
+        .control-group label { font-size: 12px; color: var(--accent); text-transform: uppercase; }
+        
+        select, button, input[type=range] {
+            background-color: rgba(0, 240, 255, 0.05); color: var(--primary); border: 1px solid var(--primary-dim);
+            padding: 6px; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; outline: none;
+        }
+        select:focus, button:hover { background-color: rgba(0, 240, 255, 0.2); border-color: var(--primary); }
+        button { cursor: pointer; font-weight: bold; letter-spacing: 1px; color: var(--bg-color); background-color: var(--primary); transition: all 0.2s; padding: 12px; font-size: 14px; flex-grow: 1; }
+        button:hover { background-color: var(--text-main); box-shadow: 0 0 10px var(--primary); }
+        
+        input[type=range] { -webkit-appearance: none; height: 2px; background: var(--primary-dim); margin: 10px 0; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 14px; background: var(--accent); cursor: pointer; border-radius: 0; }
+        
+        .slider-row { display: flex; align-items: center; justify-content: space-between; }
+        .slider-val { width: 50px; text-align: right; color: var(--primary); }
+        .checkbox-row { display: flex; align-items: center; gap: 10px; font-size: 12px; cursor: pointer; color: var(--text-main); }
+        
+        #status { margin-top: 10px; font-size: 12px; color: var(--danger); font-weight: bold; }
+
+        .footer {
+            margin-top: 30px; width: 100%; max-width: 1400px; text-align: center; border-top: 1px solid var(--primary-dim);
+            padding-top: 10px; font-size: 12px; color: var(--primary-dim); letter-spacing: 3px; text-transform: uppercase;
+        }
+        .footer span { color: var(--primary); font-weight: bold; }
+
+        @media (max-width: 800px) {
+            .scale-labels { height: 350px; }
+            #legendCanvas { height: 350px; }
+            .video-wrapper { max-width: 100%; }
+            .uplink-controls { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h2>SIGINT // THERMAL OPTICS</h2>
+            <div id="sysTime" class="sys-time">SYS.TIME: 00:00:00</div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 10px; color: var(--primary-dim);">UPLINK STATUS</div>
+            <div id="status">OFFLINE // AWAITING UPLINK</div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="panel scale-panel">
+            <canvas id="legendCanvas" width="1" height="256"></canvas>
+            <div class="scale-labels">
+                <span id="lblMax">35.0 °C</span>
+                <span id="lblMid">27.5 °C</span>
+                <span id="lblMin">20.0 °C</span>
+            </div>
+        </div>
+
+        <div class="panel video-panel">
+            <div class="video-wrapper" id="videoWrapper">
+                <canvas id="thermalCanvas" width="8" height="8"></canvas>
+                <div class="scanlines"></div>
+                <div id="ch-h" class="ch-line"></div>
+                <div id="ch-v" class="ch-line"></div>
+                <div id="targetReadout">TRG: 00.00°</div>
+            </div>
+            
+            <div class="uplink-controls" id="uplinkControls">
+                <button id="btnUSB">[ INIT HARDWIRE UPLINK (USB) ]</button>
+                <button id="btnBLE">[ INIT WIRELESS UPLINK (BLE) ]</button>
+            </div>
+        </div>
+
+        <div class="panel controls-panel">
+            <div class="control-group">
+                <label>UNIT METRICS</label>
+                <select id="selUnit">
+                    <option value="C">CELSIUS (°C)</option>
+                    <option value="F">FAHRENHEIT (°F)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>OPTICAL FILTER</label>
+                <select id="selPalette">
+                    <option value="inferno">INFERNO (DEEP PURPLE)</option>
+                    <option value="ironbow">IRONBOW (FLIR STANDARD)</option>
+                    <option value="jet">THERMAL (JET RAINBOW)</option>
+                    <option value="grayscale">WHITE HOT (FLIR)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>DSP INTERPOLATION</label>
+                <select id="selInterpolation">
+                    <option value="auto">BILINEAR SMOOTHING</option>
+                    <option value="pixelated">RAW MATRIX (8x8)</option>
+                </select>
+            </div>
+
+            <div class="control-group" style="padding-top: 10px;">
+                <label class="checkbox-row">
+                    <input type="checkbox" id="chkAutoRange"> 
+                    [ AUTO-CALIBRATE RANGE ]
+                </label>
+                <label class="checkbox-row" style="margin-top: 5px;">
+                    <input type="checkbox" id="chkMirrorX" checked> 
+                    [ MIRROR X-AXIS ]
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label>PEAK THRESHOLD</label>
+                <div class="slider-row">
+                    <input type="range" id="rngMax" min="-20" max="80" step="1" value="35">
+                    <span class="slider-val" id="valMax">35.0</span>
+                </div>
+            </div>
+
+            <div class="control-group" style="border-bottom: none;">
+                <label>FLOOR THRESHOLD</label>
+                <div class="slider-row">
+                    <input type="range" id="rngMin" min="-20" max="80" step="1" value="20">
+                    <span class="slider-val" id="valMin">20.0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        CLASSIFIED DATA STREAM // <span>TeXmExDeX Type Tools</span> // SECURE CONNECTION
+    </div>
+
+    <script>
+        const btnUSB = document.getElementById('btnUSB');
+        const btnBLE = document.getElementById('btnBLE');
+        const uplinkControls = document.getElementById('uplinkControls');
+        const statusDiv = document.getElementById('status');
+        
+        const canvas = document.getElementById('thermalCanvas');
+        const ctx = canvas.getContext('2d');
+        const legendCanvas = document.getElementById('legendCanvas');
+        const legendCtx = legendCanvas.getContext('2d');
+        const sysTime = document.getElementById('sysTime');
+        
+        const videoWrapper = document.getElementById('videoWrapper');
+        const targetReadout = document.getElementById('targetReadout');
+        const chH = document.getElementById('ch-h');
+        const chV = document.getElementById('ch-v');
+        
+        const rngMin = document.getElementById('rngMin');
+        const rngMax = document.getElementById('rngMax');
+        const valMin = document.getElementById('valMin');
+        const valMax = document.getElementById('valMax');
+        const lblMin = document.getElementById('lblMin');
+        const lblMax = document.getElementById('lblMax');
+        const lblMid = document.getElementById('lblMid');
+        const chkAutoRange = document.getElementById('chkAutoRange');
+        const chkMirrorX = document.getElementById('chkMirrorX');
+        const selPalette = document.getElementById('selPalette');
+        const selInterpolation = document.getElementById('selInterpolation');
+        const selUnit = document.getElementById('selUnit');
+
+        let minTemp = 20.0;
+        let maxTemp = 35.0;
+        const imgData = ctx.createImageData(8, 8);
+        let currentFrameTemps = new Array(64).fill(0);
+        let bleBuffer = "";
+
+        // UUIDs from Central's Perspective
+        const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const UART_TX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; 
+        const UART_RX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; 
+
+        // Feature Detection & UI Adjustment
+        if (!navigator.serial) {
+            btnUSB.style.display = 'none';
+        }
+        if (!navigator.bluetooth) {
+            btnBLE.style.display = 'none';
+        }
+
+        const PALETTES = {
+            inferno: [
+                { pos: 0.00, color: [0, 0, 4] },
+                { pos: 0.15, color: [40, 11, 84] },
+                { pos: 0.35, color: [101, 21, 110] },
+                { pos: 0.55, color: [190, 40, 80] },
+                { pos: 0.75, color: [237, 105, 37] },
+                { pos: 0.90, color: [249, 203, 53] },
+                { pos: 1.00, color: [252, 255, 164] }
+            ],
+            ironbow: [
+                { pos: 0.00, color: [0, 0, 0] },
+                { pos: 0.15, color: [20, 0, 80] },
+                { pos: 0.35, color: [130, 0, 120] },
+                { pos: 0.55, color: [255, 60, 0] },
+                { pos: 0.75, color: [255, 170, 0] },
+                { pos: 1.00, color: [255, 255, 255] }
+            ],
+            jet: [
+                { pos: 0.00, color: [0, 0, 130] },
+                { pos: 0.12, color: [0, 0, 255] },
+                { pos: 0.37, color: [0, 255, 255] },
+                { pos: 0.62, color: [255, 255, 0] },
+                { pos: 0.87, color: [255, 0, 0] },
+                { pos: 1.00, color: [130, 0, 0] }
+            ],
+            grayscale: [
+                { pos: 0.00, color: [0, 0, 0] },
+                { pos: 1.00, color: [255, 255, 255] }
+            ]
+        };
+
+        function getColor(v, paletteName) {
+            v = Math.max(0, Math.min(1, v));
+            const stops = PALETTES[paletteName];
+            
+            let lower = stops[0];
+            let upper = stops[stops.length - 1];
+            
+            for (let i = 0; i < stops.length - 1; i++) {
+                if (v >= stops[i].pos && v <= stops[i+1].pos) {
+                    lower = stops[i];
+                    upper = stops[i+1];
+                    break;
+                }
+            }
+            
+            let range = upper.pos - lower.pos;
+            let factor = (range === 0) ? 0 : (v - lower.pos) / range;
+            
+            let r = Math.round(lower.color[0] + factor * (upper.color[0] - lower.color[0]));
+            let g = Math.round(lower.color[1] + factor * (upper.color[1] - lower.color[1]));
+            let b = Math.round(lower.color[2] + factor * (upper.color[2] - lower.color[2]));
+            
+            return [r, g, b, 255];
+        }
+
+        setInterval(() => {
+            const now = new Date();
+            sysTime.innerText = "SYS.TIME: " + now.toISOString().split('T')[1].split('.')[0] + "Z";
+        }, 1000);
+
+        canvas.style.transform = chkMirrorX.checked ? "scaleX(-1)" : "scaleX(1)";
+        chkMirrorX.addEventListener('change', (e) => {
+            canvas.style.transform = e.target.checked ? "scaleX(-1)" : "scaleX(1)";
+        });
+
+        function updateScaleUI() {
+            if (!chkAutoRange.checked) {
+                minTemp = parseFloat(rngMin.value); maxTemp = parseFloat(rngMax.value);
+                if (minTemp >= maxTemp) { minTemp = maxTemp - 1; rngMin.value = minTemp; }
+            }
+            let unitStr = selUnit.value === 'F' ? ' °F' : ' °C';
+            valMin.innerText = minTemp.toFixed(1); valMax.innerText = maxTemp.toFixed(1);
+            lblMin.innerText = minTemp.toFixed(1) + unitStr; lblMax.innerText = maxTemp.toFixed(1) + unitStr;
+            lblMid.innerText = ((minTemp + maxTemp) / 2).toFixed(1) + unitStr;
+            drawLegend();
+        }
+
+        rngMin.addEventListener('input', () => { chkAutoRange.checked = false; updateScaleUI(); });
+        rngMax.addEventListener('input', () => { chkAutoRange.checked = false; updateScaleUI(); });
+        selPalette.addEventListener('change', drawLegend);
+        selInterpolation.addEventListener('change', (e) => { canvas.style.imageRendering = e.target.value; });
+
+        selUnit.addEventListener('change', (e) => {
+            if (e.target.value === 'F') {
+                minTemp = (minTemp * 9/5) + 32; maxTemp = (maxTemp * 9/5) + 32;
+                rngMin.min = -4; rngMin.max = 176; rngMax.min = -4; rngMax.max = 176;
+            } else {
+                minTemp = (minTemp - 32) * 5/9; maxTemp = (maxTemp - 32) * 5/9;
+                rngMin.min = -20; rngMin.max = 80; rngMax.min = -20; rngMax.max = 80;
+            }
+            rngMin.value = minTemp; rngMax.value = maxTemp;
+            updateScaleUI();
+        });
+
+        function drawLegend() {
+            const legendData = legendCtx.createImageData(1, 256);
+            for (let y = 0; y < 256; y++) {
+                let color = getColor(1.0 - (y / 255.0), selPalette.value);
+                let idx = y * 4;
+                legendData.data[idx] = color[0]; legendData.data[idx+1] = color[1];
+                legendData.data[idx+2] = color[2]; legendData.data[idx+3] = color[3];
+            }
+            legendCtx.putImageData(legendData, 0, 0);
+        }
+
+        function updateTargetReadout(e) {
+            const rect = videoWrapper.getBoundingClientRect();
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            let mouseX = clientX - rect.left; let mouseY = clientY - rect.top;
+            
+            if(mouseX < 0 || mouseX > rect.width || mouseY < 0 || mouseY > rect.height) return;
+
+            chV.style.left = mouseX + 'px'; chH.style.top = mouseY + 'px';
+            chV.style.display = 'block'; chH.style.display = 'block';
+            
+            let mappedX = chkMirrorX.checked ? rect.width - mouseX : mouseX;
+            let pixelX = Math.max(0, Math.min(7, Math.floor((mappedX / rect.width) * 8)));
+            let pixelY = Math.max(0, Math.min(7, Math.floor((mouseY / rect.height) * 8)));
+            
+            let targetTemp = currentFrameTemps[(pixelY * 8) + pixelX];
+            let unitStr = selUnit.value === 'F' ? 'F' : 'C';
+            
+            targetReadout.style.left = mouseX + 'px'; targetReadout.style.top = mouseY + 'px';
+            targetReadout.style.display = 'block';
+            targetReadout.innerText = `TRG: ${targetTemp.toFixed(2)}°${unitStr} \n[X:${pixelX} Y:${pixelY}]`;
+        }
+
+        videoWrapper.addEventListener('mousemove', updateTargetReadout);
+        videoWrapper.addEventListener('touchmove', (e) => { e.preventDefault(); updateTargetReadout(e); }, {passive: false});
+        
+        function hideReadout() {
+            chV.style.display = 'none'; chH.style.display = 'none'; targetReadout.style.display = 'none';
+        }
+        videoWrapper.addEventListener('mouseleave', hideReadout);
+        videoWrapper.addEventListener('touchend', hideReadout);
+
+
+        // ==========================================
+        // UPLINK 1: WEB SERIAL API (USB)
+        // ==========================================
+        async function connectUSB() {
+            try {
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                
+                statusDiv.innerText = "ONLINE // USB HARDWIRE ESTABLISHED";
+                statusDiv.style.color = "var(--primary)";
+                uplinkControls.style.display = "none";
+
+                const textDecoder = new TextDecoderStream();
+                port.readable.pipeTo(textDecoder.writable);
+                const reader = textDecoder.readable.getReader();
+
+                let buffer = "";
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) { reader.releaseLock(); break; }
+                    
+                    buffer += value;
+                    let lines = buffer.split('\n');
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        let line = lines[i].trim();
+                        if (line.length > 0) { processThermalData(line); }
+                    }
+                    buffer = lines[lines.length - 1];
+                }
+            } catch (error) {
+                statusDiv.innerText = "USB ERROR // " + error.message;
+                statusDiv.style.color = "var(--danger)";
+            }
+        }
+
+
+        // ==========================================
+        // UPLINK 2: WEB BLUETOOTH API (BLE)
+        // ==========================================
+        async function connectBLE() {
+            try {
+                statusDiv.innerText = "SCANNING RADIO FREQUENCIES...";
+                statusDiv.style.color = "var(--accent)";
+
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [UART_SERVICE_UUID] }],
+                    optionalServices: [UART_SERVICE_UUID]
+                });
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusDiv.innerText = "WARNING // WIRELESS UPLINK LOST";
+                    statusDiv.style.color = "var(--danger)";
+                    uplinkControls.style.display = "flex";
+                });
+
+                const server = await device.gatt.connect();
+                statusDiv.innerText = "NEGOTIATING GATT TABLE...";
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const service = await server.getPrimaryService(UART_SERVICE_UUID);
+                const rxChar = await service.getCharacteristic(UART_RX_CHAR_UUID);
+                const txChar = await service.getCharacteristic(UART_TX_CHAR_UUID);
+
+                await rxChar.startNotifications();
+                rxChar.addEventListener('characteristicvaluechanged', handleBLEData);
+
+                statusDiv.innerText = "AUTHORIZING SECURE STREAM...";
+                let encoder = new TextEncoder();
+                await txChar.writeValueWithoutResponse(encoder.encode("START\n"));
+
+                statusDiv.innerText = "ONLINE // BLE WIRELESS ESTABLISHED";
+                statusDiv.style.color = "var(--primary)";
+                uplinkControls.style.display = "none";
+
+            } catch (error) {
+                statusDiv.innerText = "BLE ERROR // " + error.message;
+                statusDiv.style.color = "var(--danger)";
+            }
+        }
+
+        function handleBLEData(event) {
+            let chunk = new TextDecoder().decode(event.target.value);
+            bleBuffer += chunk;
+            
+            let lines = bleBuffer.split('\n');
+            
+            if (lines.length === 1 && bleBuffer.length > 500) {
+                statusDiv.innerText = `MTU ERROR // OVERFLOW (${bleBuffer.length} BYTES)`;
+                statusDiv.style.color = "var(--accent)";
+                bleBuffer = ""; 
+                return;
+            }
+
+            for (let i = 0; i < lines.length - 1; i++) {
+                let line = lines[i].trim();
+                if (line.length > 0) { processThermalData(line); }
+            }
+            bleBuffer = lines[lines.length - 1]; 
+        }
+
+        // ==========================================
+        // UNIFIED DATA PIPELINE
+        // ==========================================
+        function processThermalData(csvString) {
+            const values = csvString.split(',');
+            
+            if (values.length !== 64) {
+                // Silently drop corrupted partial frames without breaking the UI
+                return; 
+            }
+
+            const unit = selUnit.value;
+            let temps = [];
+            
+            for (let i = 0; i < 64; i++) {
+                let t = parseFloat(values[i]);
+                if (!isNaN(t)) {
+                    if (unit === 'F') { t = (t * 9/5) + 32; }
+                    temps.push(t);
+                }
+            }
+
+            if (temps.length !== 64) return;
+            currentFrameTemps = [...temps];
+
+            if (chkAutoRange.checked) {
+                let currentMin = Math.min(...temps); let currentMax = Math.max(...temps);
+                if (currentMax === currentMin) currentMax += 0.1;
+
+                minTemp = minTemp * 0.9 + currentMin * 0.1; maxTemp = maxTemp * 0.9 + currentMax * 0.1;
+                rngMin.value = minTemp; rngMax.value = maxTemp;
+                updateScaleUI();
+            }
+
+            const palette = selPalette.value;
+
+            for (let i = 0; i < 64; i++) {
+                let color = getColor((temps[i] - minTemp) / (maxTemp - minTemp), palette);
+                let pixelIndex = i * 4;
+                imgData.data[pixelIndex] = color[0]; imgData.data[pixelIndex + 1] = color[1];
+                imgData.data[pixelIndex + 2] = color[2]; imgData.data[pixelIndex + 3] = color[3];
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        updateScaleUI();
+        btnUSB.addEventListener('click', connectUSB);
+        btnBLE.addEventListener('click', connectBLE);
+    </script>
+</body>
+</html>
