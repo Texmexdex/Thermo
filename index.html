@@ -193,7 +193,7 @@
 
         <div class="panel video-panel">
             <div class="video-wrapper" id="videoWrapper">
-                <canvas id="thermalCanvas" width="8" height="8"></canvas>
+                <canvas id="thermalCanvas" width="512" height="512"></canvas>
                 <div class="scanlines"></div>
                 <div id="ch-h" class="ch-line"></div>
                 <div id="ch-v" class="ch-line"></div>
@@ -349,7 +349,7 @@
         let firstFrame = true;
         let bleBuffer = "";
         
-        let activeTargetIndex = -1; // Stores array index of user's crosshair
+        let activeTargetIndex = -1;
         let mouseRawX = 0, mouseRawY = 0;
 
         const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
@@ -359,11 +359,9 @@
         if (!navigator.serial) btnUSB.style.display = 'none';
         if (!navigator.bluetooth) btnBLE.style.display = 'none';
 
-        // Fullscreen
         btnFullscreen.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => { alert(`Fullscreen Error: ${err.message}`); });
-            } else { document.exitFullscreen(); }
+            if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { alert(`Fullscreen Error: ${err.message}`); }); } 
+            else { document.exitFullscreen(); }
         });
         document.addEventListener('fullscreenchange', () => { btnFullscreen.innerText = document.fullscreenElement ? "[ EXIT FULLSCREEN ]" : "[ ENTER FULLSCREEN ]"; });
 
@@ -398,6 +396,7 @@
             uniform float u_iso_min;
             uniform float u_iso_max;
 
+            // Catmull-Rom math for Bicubic
             float w(float x) {
                 float a = -0.5; x = abs(x);
                 if (x <= 1.0) return (a + 2.0)*x*x*x - (a + 3.0)*x*x + 1.0;
@@ -419,10 +418,28 @@
                 return sum;
             }
 
+            // Manual Bilinear fetch to bypass browser extension limitations
+            float getBilinear(vec2 uv) {
+                vec2 texSize = vec2(8.0, 8.0);
+                vec2 p = uv * texSize - 0.5;
+                vec2 f = fract(p);
+                vec2 p0 = floor(p) + 0.5;
+                
+                float c00 = texture(u_dataTex, clamp((p0 + vec2(0.0, 0.0)) / texSize, 0.0, 1.0)).r;
+                float c10 = texture(u_dataTex, clamp((p0 + vec2(1.0, 0.0)) / texSize, 0.0, 1.0)).r;
+                float c01 = texture(u_dataTex, clamp((p0 + vec2(0.0, 1.0)) / texSize, 0.0, 1.0)).r;
+                float c11 = texture(u_dataTex, clamp((p0 + vec2(1.0, 1.0)) / texSize, 0.0, 1.0)).r;
+                
+                float x0 = mix(c00, c10, f.x);
+                float x1 = mix(c01, c11, f.x);
+                return mix(x0, x1, f.y);
+            }
+
             void main() {
                 float temp;
                 if (u_interp == 2) temp = getBicubic(v_uv);
-                else temp = texture(u_dataTex, v_uv).r;
+                else if (u_interp == 1) temp = getBilinear(v_uv);
+                else temp = texture(u_dataTex, v_uv).r; // Mode 0 (Raw Matrix)
                 
                 // Hardware Isotherm Blackout Bypass
                 if (u_iso_enabled == 1) {
@@ -467,6 +484,7 @@
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 8, 8, 0, gl.RED, gl.FLOAT, new Float32Array(64));
         gl.uniform1i(uDataTexLoc, 0);
 
@@ -504,7 +522,6 @@
             valIsoMin.innerText = parseFloat(rngIsoMin.value).toFixed(1);
             valIsoMax.innerText = parseFloat(rngIsoMax.value).toFixed(1);
             
-            // Upload to GPU
             gl.useProgram(program);
             gl.uniform1i(uIsoEnabledLoc, val === 'none' ? 0 : 1);
             gl.uniform1f(uIsoMinLoc, iMin);
@@ -576,17 +593,13 @@
         rngDenoise.addEventListener('input', (e) => { valDenoise.innerText = Math.round(e.target.value * 100) + "%"; });
 
         function updateInterpolation() {
-            const mode = parseInt(selInterpolation.value);
-            gl.useProgram(program); gl.uniform1i(uInterpLoc, mode);
-            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mode === 1 ? gl.LINEAR : gl.NEAREST);
+            gl.useProgram(program); gl.uniform1i(uInterpLoc, parseInt(selInterpolation.value));
             if(!firstFrame) renderWebGL();
         }
         selInterpolation.addEventListener('change', updateInterpolation);
 
         selUnit.addEventListener('change', (e) => {
             let isF = e.target.value === 'F';
-            // Scale conversion
             let newMin = isF ? (minTemp * 9/5) + 32 : (minTemp - 32) * 5/9;
             let newMax = isF ? (maxTemp * 9/5) + 32 : (maxTemp - 32) * 5/9;
             rngMin.min = isF ? -4 : -20; rngMin.max = isF ? 176 : 80;
@@ -594,7 +607,6 @@
             rngMin.value = newMin; rngMax.value = newMax;
             minTemp = newMin; maxTemp = newMax;
             
-            // Isotherm Slider limits update
             rngIsoMin.min = isF ? -4 : -20; rngIsoMin.max = isF ? 212 : 100;
             rngIsoMax.min = isF ? -4 : -20; rngIsoMax.max = isF ? 212 : 100;
             updateIsothermUI();
@@ -627,7 +639,6 @@
             targetReadout.style.left = mouseRawX + 'px'; targetReadout.style.top = mouseRawY + 'px';
             
             activeTargetIndex = calculateIndexFromMouse(mouseRawX, mouseRawY, rect);
-            // The text itself updates continuously inside renderWebGL
         }
 
         videoWrapper.addEventListener('mousemove', updateHoverState);
@@ -656,10 +667,8 @@
             const rect = videoWrapper.getBoundingClientRect();
             let unitStr = selUnit.value;
             
-            // Positioning Logic
             const applyMarker = (marker, idx, temp, label) => {
                 let px = idx % 8; let py = Math.floor(idx / 8);
-                // Center of the 8x8 pixel sector
                 let unmappedX = (px + 0.5) * (rect.width / 8);
                 let visualX = chkMirrorX.checked ? rect.width - unmappedX : unmappedX;
                 let visualY = (py + 0.5) * (rect.height / 8);
@@ -676,24 +685,19 @@
 
         function renderWebGL() {
             gl.useProgram(program);
-            
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, dataTex);
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 8, 8, gl.RED, gl.FLOAT, currentFrameTemps);
-            
             gl.uniform1f(uMinLoc, minTemp);
             gl.uniform1f(uMaxLoc, maxTemp);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-            // Continuously update crosshair text without waiting for mouse movement
             if (activeTargetIndex !== -1) {
                 let targetTemp = currentFrameTemps[activeTargetIndex];
                 let unitStr = selUnit.value;
                 let px = activeTargetIndex % 8; let py = Math.floor(activeTargetIndex / 8);
                 targetReadout.innerText = `TRG: ${targetTemp.toFixed(2)}°${unitStr} \n[X:${px} Y:${py}]`;
             }
-            
-            // Continuously update hot/cold markers
             updateTrackingMarkers();
         }
 
@@ -712,8 +716,7 @@
             }
             if (rawTemps.length !== 64) return;
             
-            // Apply Temporal Denoising (Exponential Moving Average)
-            let alpha = 1.0 - parseFloat(rngDenoise.value); // Invert UI: higher denoise slider = lower alpha
+            let alpha = 1.0 - parseFloat(rngDenoise.value);
             for (let i = 0; i < 64; i++) {
                 if (firstFrame) {
                     emaBuffer[i] = rawTemps[i];
