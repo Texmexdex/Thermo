@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TACTICAL THERMAL OSINT // GPU DSP</title>
+    <title>TACTICAL THERMAL OSINT // ADVANCED DSP</title>
     <style>
         :root {
             --bg-color: #03060a;
@@ -12,6 +12,7 @@
             --primary-dim: rgba(0, 240, 255, 0.3);
             --accent: #ffab00;
             --danger: #ff003c;
+            --cold: #0055ff;
             --text-main: #e0f8ff;
             --font-mono: 'Courier New', Courier, monospace;
         }
@@ -34,7 +35,7 @@
 
         .header {
             width: 100%;
-            max-width: 1200px; 
+            max-width: 1500px; 
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
@@ -44,16 +45,16 @@
             text-transform: uppercase;
         }
         .header h2 { margin: 0; color: var(--primary); font-size: 24px; letter-spacing: 2px; text-shadow: 0 0 8px var(--primary-dim); }
-        .sys-time { color: var(--accent); font-size: 14px; }
+        .sys-time { color: var(--accent); font-size: 14px; margin-top: 4px;}
 
         .main-container {
             display: flex;
             flex-direction: row;
             justify-content: center;
-            align-items: stretch;
+            align-items: flex-start;
             gap: 20px;
             width: 100%;
-            max-width: 1200px; 
+            max-width: 1500px; 
             flex-wrap: wrap; 
         }
         
@@ -103,6 +104,7 @@
             pointer-events: none; z-index: 5;
         }
 
+        /* Readouts and Markers */
         #targetReadout {
             position: absolute; display: none; color: var(--primary); font-size: 14px; font-weight: bold;
             background: rgba(0, 0, 0, 0.85); border: 1px solid var(--primary); padding: 6px 10px;
@@ -112,6 +114,15 @@
         .ch-line { position: absolute; background-color: rgba(0, 240, 255, 0.5); pointer-events: none; z-index: 8; display: none; }
         #ch-h { height: 1px; width: 100%; left: 0; }
         #ch-v { width: 1px; height: 100%; top: 0; }
+
+        .track-marker {
+            position: absolute; display: none; font-size: 12px; font-weight: bold;
+            background: rgba(0, 0, 0, 0.7); padding: 2px 6px; border-radius: 4px;
+            pointer-events: none; z-index: 9; transform: translate(-50%, -50%);
+            white-space: pre; text-align: center;
+        }
+        #hotMarker { color: var(--danger); border: 1px solid var(--danger); text-shadow: 0 0 5px var(--danger); }
+        #coldMarker { color: var(--cold); border: 1px solid var(--cold); text-shadow: 0 0 5px var(--cold); }
 
         .uplink-controls { display: flex; width: 100%; max-width: 720px; gap: 15px; margin-top: 15px; }
 
@@ -127,6 +138,9 @@
         button { cursor: pointer; font-weight: bold; letter-spacing: 1px; color: var(--bg-color); background-color: var(--primary); transition: all 0.2s; padding: 12px; font-size: 14px; flex-grow: 1; }
         button:hover { background-color: var(--text-main); box-shadow: 0 0 10px var(--primary); }
         
+        .fs-btn { background-color: transparent; border: 1px solid var(--primary); padding: 4px 8px; font-size: 10px; color: var(--primary); width: auto; margin-bottom: 5px; }
+        .fs-btn:hover { background-color: var(--primary); color: var(--bg-color); }
+
         input[type=range] { -webkit-appearance: none; height: 2px; background: var(--primary-dim); margin: 10px 0; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 14px; background: var(--accent); cursor: pointer; border-radius: 0; }
         
@@ -134,30 +148,34 @@
         .slider-val { width: 50px; text-align: right; color: var(--primary); }
         .checkbox-row { display: flex; align-items: center; gap: 10px; font-size: 12px; cursor: pointer; color: var(--text-main); }
         
-        #status { margin-top: 10px; font-size: 12px; color: var(--danger); font-weight: bold; }
+        #status { font-size: 12px; color: var(--danger); font-weight: bold; }
 
         .footer {
-            margin-top: 30px; width: 100%; max-width: 1200px; text-align: center; border-top: 1px solid var(--primary-dim);
+            margin-top: 30px; width: 100%; max-width: 1500px; text-align: center; border-top: 1px solid var(--primary-dim);
             padding-top: 10px; font-size: 12px; color: var(--primary-dim); letter-spacing: 3px; text-transform: uppercase;
         }
         .footer span { color: var(--primary); font-weight: bold; }
 
-        @media (max-width: 1100px) {
+        @media (max-width: 1300px) {
             .scale-labels { height: 350px; }
             #legendCanvas { height: 350px; }
             .video-wrapper { max-width: 100%; }
             .uplink-controls { flex-direction: column; }
         }
+
+        :fullscreen { overflow-y: auto; background-color: var(--bg-color); padding: 20px; }
+        ::backdrop { background-color: var(--bg-color); }
     </style>
 </head>
 <body>
 
     <div class="header">
         <div>
-            <h2>SIGINT // GPU THERMAL DSP</h2>
+            <h2>SIGINT // ADVANCED GPU DSP</h2>
             <div id="sysTime" class="sys-time">SYS.TIME: 00:00:00</div>
         </div>
-        <div style="text-align: right;">
+        <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+            <button id="btnFullscreen" class="fs-btn">[ ENTER FULLSCREEN ]</button>
             <div style="font-size: 10px; color: var(--primary-dim);">UPLINK STATUS</div>
             <div id="status">OFFLINE // AWAITING UPLINK</div>
         </div>
@@ -180,6 +198,8 @@
                 <div id="ch-h" class="ch-line"></div>
                 <div id="ch-v" class="ch-line"></div>
                 <div id="targetReadout">TRG: 00.00°</div>
+                <div id="hotMarker" class="track-marker"></div>
+                <div id="coldMarker" class="track-marker"></div>
             </div>
             
             <div class="uplink-controls" id="uplinkControls">
@@ -228,7 +248,7 @@
             </div>
 
             <div class="control-group">
-                <label>PEAK THRESHOLD</label>
+                <label>GLOBAL PEAK RANGE</label>
                 <div class="slider-row">
                     <input type="range" id="rngMax" min="-20" max="80" step="1" value="35">
                     <span class="slider-val" id="valMax">35.0</span>
@@ -236,10 +256,55 @@
             </div>
 
             <div class="control-group" style="border-bottom: none;">
-                <label>FLOOR THRESHOLD</label>
+                <label>GLOBAL FLOOR RANGE</label>
                 <div class="slider-row">
                     <input type="range" id="rngMin" min="-20" max="80" step="1" value="20">
                     <span class="slider-val" id="valMin">20.0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel controls-panel">
+            <div class="control-group" style="padding-top: 5px;">
+                <label class="checkbox-row" style="color: var(--accent);">
+                    <input type="checkbox" id="chkTrackExtremes"> 
+                    [ ACQUIRE MAX/MIN TARGETS ]
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label>TEMPORAL DENOISING (EMA)</label>
+                <div class="slider-row">
+                    <input type="range" id="rngDenoise" min="0" max="0.9" step="0.1" value="0.5">
+                    <span class="slider-val" id="valDenoise">50%</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>ISOTHERM OVERRIDE (GPU BLACKOUT)</label>
+                <select id="selIsotherm">
+                    <option value="none">-- DISABLED --</option>
+                    <option value="human">HUMAN / ANIMAL DETECT</option>
+                    <option value="elec">WIRE / ELECTRONICS ISO</option>
+                    <option value="draft">A/C / DOOR DRAFT LEAK</option>
+                    <option value="fridge">FRIDGE SEAL LEAK</option>
+                    <option value="manual">MANUAL CLAMP</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>ISOTHERM PEAK CLAMP</label>
+                <div class="slider-row">
+                    <input type="range" id="rngIsoMax" min="-20" max="100" step="1" value="38" disabled>
+                    <span class="slider-val" id="valIsoMax">38.0</span>
+                </div>
+            </div>
+
+            <div class="control-group" style="border-bottom: none;">
+                <label>ISOTHERM FLOOR CLAMP</label>
+                <div class="slider-row">
+                    <input type="range" id="rngIsoMin" min="-20" max="100" step="1" value="34" disabled>
+                    <span class="slider-val" id="valIsoMin">34.0</span>
                 </div>
             </div>
         </div>
@@ -252,26 +317,40 @@
     <script>
         // DOM Elements
         const btnUSB = document.getElementById('btnUSB'), btnBLE = document.getElementById('btnBLE');
+        const btnFullscreen = document.getElementById('btnFullscreen');
         const uplinkControls = document.getElementById('uplinkControls'), statusDiv = document.getElementById('status');
         
         const canvas = document.getElementById('thermalCanvas');
-        const legendCanvas = document.getElementById('legendCanvas');
-        const legendCtx = legendCanvas.getContext('2d');
-        const sysTime = document.getElementById('sysTime');
+        const legendCanvas = document.getElementById('legendCanvas'), legendCtx = legendCanvas.getContext('2d');
+        const sysTime = document.getElementById('sysTime'), videoWrapper = document.getElementById('videoWrapper');
         
-        const videoWrapper = document.getElementById('videoWrapper');
-        const targetReadout = document.getElementById('targetReadout');
-        const chH = document.getElementById('ch-h'), chV = document.getElementById('ch-v');
+        // Readouts
+        const targetReadout = document.getElementById('targetReadout'), chH = document.getElementById('ch-h'), chV = document.getElementById('ch-v');
+        const hotMarker = document.getElementById('hotMarker'), coldMarker = document.getElementById('coldMarker');
         
+        // Optics UI
         const rngMin = document.getElementById('rngMin'), rngMax = document.getElementById('rngMax');
         const valMin = document.getElementById('valMin'), valMax = document.getElementById('valMax');
         const lblMin = document.getElementById('lblMin'), lblMax = document.getElementById('lblMax'), lblMid = document.getElementById('lblMid');
         const chkAutoRange = document.getElementById('chkAutoRange'), chkMirrorX = document.getElementById('chkMirrorX');
         const selPalette = document.getElementById('selPalette'), selUnit = document.getElementById('selUnit'), selInterpolation = document.getElementById('selInterpolation');
+        
+        // Targeting UI
+        const chkTrackExtremes = document.getElementById('chkTrackExtremes');
+        const rngDenoise = document.getElementById('rngDenoise'), valDenoise = document.getElementById('valDenoise');
+        const selIsotherm = document.getElementById('selIsotherm');
+        const rngIsoMin = document.getElementById('rngIsoMin'), rngIsoMax = document.getElementById('rngIsoMax');
+        const valIsoMin = document.getElementById('valIsoMin'), valIsoMax = document.getElementById('valIsoMax');
 
+        // State Variables
         let minTemp = 20.0, maxTemp = 35.0;
         let currentFrameTemps = new Float32Array(64);
+        let emaBuffer = new Float32Array(64);
+        let firstFrame = true;
         let bleBuffer = "";
+        
+        let activeTargetIndex = -1; // Stores array index of user's crosshair
+        let mouseRawX = 0, mouseRawY = 0;
 
         const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
         const UART_TX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; 
@@ -280,13 +359,19 @@
         if (!navigator.serial) btnUSB.style.display = 'none';
         if (!navigator.bluetooth) btnBLE.style.display = 'none';
 
+        // Fullscreen
+        btnFullscreen.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => { alert(`Fullscreen Error: ${err.message}`); });
+            } else { document.exitFullscreen(); }
+        });
+        document.addEventListener('fullscreenchange', () => { btnFullscreen.innerText = document.fullscreenElement ? "[ EXIT FULLSCREEN ]" : "[ ENTER FULLSCREEN ]"; });
+
         // ---------------------------------------------------------
-        // WEBGL 2.0 INITIALIZATION & SHADER PIPELINE
+        // WEBGL 2.0 SHADER PIPELINE
         // ---------------------------------------------------------
         const gl = canvas.getContext('webgl2');
-        if (!gl) {
-            alert('CRITICAL ERROR: WebGL 2.0 is not supported on this device. GPU DSP unavailable.');
-        }
+        if (!gl) alert('CRITICAL ERROR: WebGL 2.0 is not supported. GPU DSP unavailable.');
 
         const vsSource = `#version 300 es
             in vec2 a_position;
@@ -308,10 +393,13 @@
             uniform float u_min;
             uniform float u_max;
             uniform int u_interp;
+            
+            uniform int u_iso_enabled;
+            uniform float u_iso_min;
+            uniform float u_iso_max;
 
             float w(float x) {
-                float a = -0.5;
-                x = abs(x);
+                float a = -0.5; x = abs(x);
                 if (x <= 1.0) return (a + 2.0)*x*x*x - (a + 3.0)*x*x + 1.0;
                 else if (x < 2.0) return a*x*x*x - 5.0*a*x*x + 8.0*a*x - 4.0*a;
                 return 0.0;
@@ -320,15 +408,12 @@
             float getBicubic(vec2 uv) {
                 vec2 texSize = vec2(8.0, 8.0);
                 vec2 p = uv * texSize - 0.5;
-                vec2 f = fract(p);
-                vec2 p0 = floor(p) + 0.5;
-                
+                vec2 f = fract(p); vec2 p0 = floor(p) + 0.5;
                 float sum = 0.0;
                 for(float y = -1.0; y <= 2.0; y++) {
                     for(float x = -1.0; x <= 2.0; x++) {
                         vec2 coord = clamp((p0 + vec2(x, y)) / texSize, 0.0, 1.0);
-                        float val = texture(u_dataTex, coord).r;
-                        sum += val * w(x - f.x) * w(y - f.y);
+                        sum += texture(u_dataTex, coord).r * w(x - f.x) * w(y - f.y);
                     }
                 }
                 return sum;
@@ -336,37 +421,33 @@
 
             void main() {
                 float temp;
-                if (u_interp == 2) {
-                    temp = getBicubic(v_uv);
-                } else {
-                    temp = texture(u_dataTex, v_uv).r;
+                if (u_interp == 2) temp = getBicubic(v_uv);
+                else temp = texture(u_dataTex, v_uv).r;
+                
+                // Hardware Isotherm Blackout Bypass
+                if (u_iso_enabled == 1) {
+                    if (temp < u_iso_min || temp > u_iso_max) {
+                        outColor = vec4(0.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
                 }
                 
                 float norm = clamp((temp - u_min) / (u_max - u_min), 0.0, 1.0);
-                vec3 col = texture(u_palTex, vec2(norm, 0.5)).rgb;
-                outColor = vec4(col, 1.0);
+                outColor = vec4(texture(u_palTex, vec2(norm, 0.5)).rgb, 1.0);
             }
         `;
 
         function createShader(gl, type, source) {
             const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error(gl.getShaderInfoLog(shader));
-                gl.deleteShader(shader);
-                return null;
-            }
+            gl.shaderSource(shader, source); gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(shader)); gl.deleteShader(shader); return null; }
             return shader;
         }
 
-        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
-        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
         const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        gl.useProgram(program);
+        gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vsSource));
+        gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fsSource));
+        gl.linkProgram(program); gl.useProgram(program);
 
         const positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -375,34 +456,68 @@
         gl.enableVertexAttribArray(positionLocation);
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-        const uMinLoc = gl.getUniformLocation(program, "u_min");
-        const uMaxLoc = gl.getUniformLocation(program, "u_max");
-        const uInterpLoc = gl.getUniformLocation(program, "u_interp");
-        
-        const uDataTexLoc = gl.getUniformLocation(program, "u_dataTex");
+        const uMinLoc = gl.getUniformLocation(program, "u_min"), uMaxLoc = gl.getUniformLocation(program, "u_max");
+        const uInterpLoc = gl.getUniformLocation(program, "u_interp"), uDataTexLoc = gl.getUniformLocation(program, "u_dataTex");
         const uPalTexLoc = gl.getUniformLocation(program, "u_palTex");
+        const uIsoEnabledLoc = gl.getUniformLocation(program, "u_iso_enabled");
+        const uIsoMinLoc = gl.getUniformLocation(program, "u_iso_min");
+        const uIsoMaxLoc = gl.getUniformLocation(program, "u_iso_max");
 
         const dataTex = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, dataTex);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 8, 8, 0, gl.RED, gl.FLOAT, new Float32Array(64));
         gl.uniform1i(uDataTexLoc, 0);
 
         const palTex = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, palTex);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, palTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.uniform1i(uPalTexLoc, 1);
 
+        // ---------------------------------------------------------
+        // ISOTHERM TARGETING LOGIC
+        // ---------------------------------------------------------
+        function convertCToCurrent(c) { return selUnit.value === 'F' ? (c * 9/5) + 32 : c; }
+
+        function updateIsothermUI() {
+            const val = selIsotherm.value;
+            let iMin = 0, iMax = 100;
+            let isManual = (val === 'manual');
+            
+            rngIsoMin.disabled = !isManual; rngIsoMax.disabled = !isManual;
+
+            if (val === 'human') { iMin = convertCToCurrent(34); iMax = convertCToCurrent(38); }
+            else if (val === 'elec') { iMin = convertCToCurrent(45); iMax = convertCToCurrent(80); }
+            else if (val === 'draft') { iMin = convertCToCurrent(10); iMax = convertCToCurrent(18); }
+            else if (val === 'fridge') { iMin = convertCToCurrent(0); iMax = convertCToCurrent(8); }
+            else if (isManual) { iMin = parseFloat(rngIsoMin.value); iMax = parseFloat(rngIsoMax.value); }
+            
+            if (val !== 'none' && !isManual) { rngIsoMin.value = iMin; rngIsoMax.value = iMax; }
+            if (isManual) {
+                if(parseFloat(rngIsoMin.value) >= parseFloat(rngIsoMax.value)) {
+                    rngIsoMin.value = parseFloat(rngIsoMax.value) - 1; iMin = parseFloat(rngIsoMin.value);
+                }
+            }
+
+            valIsoMin.innerText = parseFloat(rngIsoMin.value).toFixed(1);
+            valIsoMax.innerText = parseFloat(rngIsoMax.value).toFixed(1);
+            
+            // Upload to GPU
+            gl.useProgram(program);
+            gl.uniform1i(uIsoEnabledLoc, val === 'none' ? 0 : 1);
+            gl.uniform1f(uIsoMinLoc, iMin);
+            gl.uniform1f(uIsoMaxLoc, iMax);
+            if(!firstFrame) renderWebGL();
+        }
+
+        selIsotherm.addEventListener('change', updateIsothermUI);
+        rngIsoMin.addEventListener('input', updateIsothermUI);
+        rngIsoMax.addEventListener('input', updateIsothermUI);
 
         // ---------------------------------------------------------
-        // COLOR DICTIONARY & UI
+        // UI & PALETTES
         // ---------------------------------------------------------
         const PALETTES = {
             inferno: [{ pos: 0.00, color: [0, 0, 4] }, { pos: 0.15, color: [40, 11, 84] }, { pos: 0.35, color: [101, 21, 110] }, { pos: 0.55, color: [190, 40, 80] }, { pos: 0.75, color: [237, 105, 37] }, { pos: 0.90, color: [249, 203, 53] }, { pos: 1.00, color: [252, 255, 164] }],
@@ -428,23 +543,16 @@
             const stops = PALETTES[selPalette.value];
             const palArray = new Uint8Array(256 * 3);
             const legendData = legendCtx.createImageData(1, 256);
-            
             for (let i = 0; i < 256; i++) {
-                let v = i / 255.0;
-                let c = getInterpolatedColor(v, stops);
-                
+                let c = getInterpolatedColor(i / 255.0, stops);
                 palArray[i*3] = c[0]; palArray[i*3+1] = c[1]; palArray[i*3+2] = c[2];
-                
                 let y = 255 - i;
                 legendData.data[y*4] = c[0]; legendData.data[y*4+1] = c[1]; legendData.data[y*4+2] = c[2]; legendData.data[y*4+3] = 255;
             }
-            
             legendCtx.putImageData(legendData, 0, 0);
-            
-            gl.activeTexture(gl.TEXTURE1);
-            gl.bindTexture(gl.TEXTURE_2D, palTex);
+            gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, palTex);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 256, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, palArray);
-            renderWebGL();
+            if(!firstFrame) renderWebGL();
         }
 
         setInterval(() => { sysTime.innerText = "SYS.TIME: " + new Date().toISOString().split('T')[1].split('.')[0] + "Z"; }, 1000);
@@ -458,82 +566,114 @@
             valMin.innerText = minTemp.toFixed(1); valMax.innerText = maxTemp.toFixed(1);
             lblMin.innerText = minTemp.toFixed(1) + unitStr; lblMax.innerText = maxTemp.toFixed(1) + unitStr;
             lblMid.innerText = ((minTemp + maxTemp) / 2).toFixed(1) + unitStr;
-            renderWebGL();
+            if(!firstFrame) renderWebGL();
         }
 
         rngMin.addEventListener('input', () => { chkAutoRange.checked = false; updateScaleUI(); });
         rngMax.addEventListener('input', () => { chkAutoRange.checked = false; updateScaleUI(); });
         selPalette.addEventListener('change', updatePalette);
 
+        rngDenoise.addEventListener('input', (e) => { valDenoise.innerText = Math.round(e.target.value * 100) + "%"; });
+
         function updateInterpolation() {
             const mode = parseInt(selInterpolation.value);
-            gl.useProgram(program);
-            gl.uniform1i(uInterpLoc, mode);
-            
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, dataTex);
+            gl.useProgram(program); gl.uniform1i(uInterpLoc, mode);
+            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mode === 1 ? gl.LINEAR : gl.NEAREST);
-            renderWebGL();
+            if(!firstFrame) renderWebGL();
         }
         selInterpolation.addEventListener('change', updateInterpolation);
 
         selUnit.addEventListener('change', (e) => {
-            if (e.target.value === 'F') {
-                minTemp = (minTemp * 9/5) + 32; maxTemp = (maxTemp * 9/5) + 32;
-                rngMin.min = -4; rngMin.max = 176; rngMax.min = -4; rngMax.max = 176;
-            } else {
-                minTemp = (minTemp - 32) * 5/9; maxTemp = (maxTemp - 32) * 5/9;
-                rngMin.min = -20; rngMin.max = 80; rngMax.min = -20; rngMax.max = 80;
-            }
-            rngMin.value = minTemp; rngMax.value = maxTemp;
+            let isF = e.target.value === 'F';
+            // Scale conversion
+            let newMin = isF ? (minTemp * 9/5) + 32 : (minTemp - 32) * 5/9;
+            let newMax = isF ? (maxTemp * 9/5) + 32 : (maxTemp - 32) * 5/9;
+            rngMin.min = isF ? -4 : -20; rngMin.max = isF ? 176 : 80;
+            rngMax.min = isF ? -4 : -20; rngMax.max = isF ? 176 : 80;
+            rngMin.value = newMin; rngMax.value = newMax;
+            minTemp = newMin; maxTemp = newMax;
+            
+            // Isotherm Slider limits update
+            rngIsoMin.min = isF ? -4 : -20; rngIsoMin.max = isF ? 212 : 100;
+            rngIsoMax.min = isF ? -4 : -20; rngIsoMax.max = isF ? 212 : 100;
+            updateIsothermUI();
             updateScaleUI();
         });
 
-
-        // ---------------------------------------------------------
-        // CSS TRANSFORM & TARGETING
-        // ---------------------------------------------------------
         canvas.style.transform = chkMirrorX.checked ? "scaleX(-1)" : "scaleX(1)";
-        chkMirrorX.addEventListener('change', (e) => {
-            canvas.style.transform = e.target.checked ? "scaleX(-1)" : "scaleX(1)";
-        });
+        chkMirrorX.addEventListener('change', (e) => { canvas.style.transform = e.target.checked ? "scaleX(-1)" : "scaleX(1)"; });
 
-        function updateTargetReadout(e) {
-            const rect = videoWrapper.getBoundingClientRect();
-            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            
-            let mouseX = clientX - rect.left; let mouseY = clientY - rect.top;
-            if(mouseX < 0 || mouseX > rect.width || mouseY < 0 || mouseY > rect.height) return;
-
-            chV.style.left = mouseX + 'px'; chH.style.top = mouseY + 'px';
-            chV.style.display = 'block'; chH.style.display = 'block';
-            
-            let mappedX = chkMirrorX.checked ? rect.width - mouseX : mouseX;
+        // ---------------------------------------------------------
+        // TARGETING & RENDERING LOGIC
+        // ---------------------------------------------------------
+        function calculateIndexFromMouse(x, y, rect) {
+            let mappedX = chkMirrorX.checked ? rect.width - x : x;
             let pixelX = Math.max(0, Math.min(7, Math.floor((mappedX / rect.width) * 8)));
-            let pixelY = Math.max(0, Math.min(7, Math.floor((mouseY / rect.height) * 8)));
-            
-            let targetTemp = currentFrameTemps[(pixelY * 8) + pixelX];
-            let unitStr = selUnit.value === 'F' ? 'F' : 'C';
-            
-            targetReadout.style.left = mouseX + 'px'; targetReadout.style.top = mouseY + 'px';
-            targetReadout.style.display = 'block';
-            targetReadout.innerText = `TRG: ${targetTemp.toFixed(2)}°${unitStr} \n[X:${pixelX} Y:${pixelY}]`;
+            let pixelY = Math.max(0, Math.min(7, Math.floor((y / rect.height) * 8)));
+            return (pixelY * 8) + pixelX;
         }
 
-        videoWrapper.addEventListener('mousemove', updateTargetReadout);
-        videoWrapper.addEventListener('touchmove', (e) => { e.preventDefault(); updateTargetReadout(e); }, {passive: false});
+        function updateHoverState(e) {
+            const rect = videoWrapper.getBoundingClientRect();
+            mouseRawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            mouseRawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            
+            if(mouseRawX < 0 || mouseRawX > rect.width || mouseRawY < 0 || mouseRawY > rect.height) { hideReadout(); return; }
+
+            chV.style.left = mouseRawX + 'px'; chH.style.top = mouseRawY + 'px';
+            chV.style.display = 'block'; chH.style.display = 'block';
+            targetReadout.style.display = 'block';
+            targetReadout.style.left = mouseRawX + 'px'; targetReadout.style.top = mouseRawY + 'px';
+            
+            activeTargetIndex = calculateIndexFromMouse(mouseRawX, mouseRawY, rect);
+            // The text itself updates continuously inside renderWebGL
+        }
+
+        videoWrapper.addEventListener('mousemove', updateHoverState);
+        videoWrapper.addEventListener('touchmove', (e) => { e.preventDefault(); updateHoverState(e); }, {passive: false});
         
         function hideReadout() {
             chV.style.display = 'none'; chH.style.display = 'none'; targetReadout.style.display = 'none';
+            activeTargetIndex = -1;
         }
         videoWrapper.addEventListener('mouseleave', hideReadout);
         videoWrapper.addEventListener('touchend', hideReadout);
 
+        function updateTrackingMarkers() {
+            if (!chkTrackExtremes.checked) {
+                hotMarker.style.display = 'none'; coldMarker.style.display = 'none';
+                return;
+            }
+            let maxT = -Infinity, minT = Infinity;
+            let maxIdx = 0, minIdx = 0;
+            
+            for (let i = 0; i < 64; i++) {
+                if (currentFrameTemps[i] > maxT) { maxT = currentFrameTemps[i]; maxIdx = i; }
+                if (currentFrameTemps[i] < minT) { minT = currentFrameTemps[i]; minIdx = i; }
+            }
 
-        // ---------------------------------------------------------
-        // UPLINK & CORE RENDER PIPELINE
-        // ---------------------------------------------------------
+            const rect = videoWrapper.getBoundingClientRect();
+            let unitStr = selUnit.value;
+            
+            // Positioning Logic
+            const applyMarker = (marker, idx, temp, label) => {
+                let px = idx % 8; let py = Math.floor(idx / 8);
+                // Center of the 8x8 pixel sector
+                let unmappedX = (px + 0.5) * (rect.width / 8);
+                let visualX = chkMirrorX.checked ? rect.width - unmappedX : unmappedX;
+                let visualY = (py + 0.5) * (rect.height / 8);
+                
+                marker.style.left = visualX + 'px';
+                marker.style.top = visualY + 'px';
+                marker.innerText = `[${label}]\n${temp.toFixed(1)}°${unitStr}`;
+                marker.style.display = 'block';
+            };
+
+            applyMarker(hotMarker, maxIdx, maxT, '+');
+            applyMarker(coldMarker, minIdx, minT, '-');
+        }
+
         function renderWebGL() {
             gl.useProgram(program);
             
@@ -543,8 +683,18 @@
             
             gl.uniform1f(uMinLoc, minTemp);
             gl.uniform1f(uMaxLoc, maxTemp);
-            
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+            // Continuously update crosshair text without waiting for mouse movement
+            if (activeTargetIndex !== -1) {
+                let targetTemp = currentFrameTemps[activeTargetIndex];
+                let unitStr = selUnit.value;
+                let px = activeTargetIndex % 8; let py = Math.floor(activeTargetIndex / 8);
+                targetReadout.innerText = `TRG: ${targetTemp.toFixed(2)}°${unitStr} \n[X:${px} Y:${py}]`;
+            }
+            
+            // Continuously update hot/cold markers
+            updateTrackingMarkers();
         }
 
         function processThermalData(csvString) {
@@ -552,20 +702,30 @@
             if (values.length !== 64) return; 
 
             const unit = selUnit.value;
-            let temps = [];
+            let rawTemps = [];
             for (let i = 0; i < 64; i++) {
                 let t = parseFloat(values[i]);
                 if (!isNaN(t)) {
                     if (unit === 'F') { t = (t * 9/5) + 32; }
-                    temps.push(t);
+                    rawTemps.push(t);
                 }
             }
-            if (temps.length !== 64) return;
+            if (rawTemps.length !== 64) return;
             
-            currentFrameTemps.set(temps);
+            // Apply Temporal Denoising (Exponential Moving Average)
+            let alpha = 1.0 - parseFloat(rngDenoise.value); // Invert UI: higher denoise slider = lower alpha
+            for (let i = 0; i < 64; i++) {
+                if (firstFrame) {
+                    emaBuffer[i] = rawTemps[i];
+                } else {
+                    emaBuffer[i] = (alpha * rawTemps[i]) + ((1 - alpha) * emaBuffer[i]);
+                }
+            }
+            firstFrame = false;
+            currentFrameTemps.set(emaBuffer);
 
             if (chkAutoRange.checked) {
-                let currentMin = Math.min(...temps); let currentMax = Math.max(...temps);
+                let currentMin = Math.min(...currentFrameTemps); let currentMax = Math.max(...currentFrameTemps);
                 if (currentMax === currentMin) currentMax += 0.1;
                 minTemp = minTemp * 0.9 + currentMin * 0.1; maxTemp = maxTemp * 0.9 + currentMax * 0.1;
                 rngMin.value = minTemp; rngMax.value = maxTemp;
@@ -575,6 +735,9 @@
             }
         }
 
+        // ---------------------------------------------------------
+        // UPLINK NEGOTIATION
+        // ---------------------------------------------------------
         async function connectUSB() {
             try {
                 const port = await navigator.serial.requestPort();
@@ -598,9 +761,7 @@
                     }
                     buffer = lines[lines.length - 1];
                 }
-            } catch (error) {
-                statusDiv.innerText = "USB ERROR // " + error.message; statusDiv.style.color = "var(--danger)";
-            }
+            } catch (error) { statusDiv.innerText = "USB ERROR // " + error.message; statusDiv.style.color = "var(--danger)"; }
         }
 
         async function connectBLE() {
@@ -623,9 +784,7 @@
                 await txChar.writeValueWithoutResponse(encoder.encode("START\n"));
                 statusDiv.innerText = "ONLINE // BLE WIRELESS ESTABLISHED"; statusDiv.style.color = "var(--primary)";
                 uplinkControls.style.display = "none";
-            } catch (error) {
-                statusDiv.innerText = "BLE ERROR // " + error.message; statusDiv.style.color = "var(--danger)";
-            }
+            } catch (error) { statusDiv.innerText = "BLE ERROR // " + error.message; statusDiv.style.color = "var(--danger)"; }
         }
 
         function handleBLEData(event) {
@@ -642,11 +801,8 @@
             bleBuffer = lines[lines.length - 1]; 
         }
 
-        updatePalette();
-        updateInterpolation();
-        updateScaleUI();
-        btnUSB.addEventListener('click', connectUSB);
-        btnBLE.addEventListener('click', connectBLE);
+        updatePalette(); updateInterpolation(); updateIsothermUI(); updateScaleUI();
+        btnUSB.addEventListener('click', connectUSB); btnBLE.addEventListener('click', connectBLE);
     </script>
 </body>
 </html>
