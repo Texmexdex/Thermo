@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TACTICAL THERMAL OSINT // SENSOR FUSION</title>
+    <title>TACTICAL THERMAL OSINT // GPU DSP</title>
     <style>
         :root {
             --bg-color: #03060a;
@@ -34,7 +34,7 @@
 
         .header {
             width: 100%;
-            max-width: 1600px; 
+            max-width: 1200px; 
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
@@ -53,7 +53,7 @@
             align-items: stretch;
             gap: 20px;
             width: 100%;
-            max-width: 1600px; 
+            max-width: 1200px; 
             flex-wrap: wrap; 
         }
         
@@ -85,30 +85,15 @@
             border: 1px solid var(--primary);
             background-color: #000;
             cursor: crosshair;
-            overflow: hidden; /* Prevent scaled thermal layer from bleeding out */
+            overflow: hidden; 
         }
 
-        /* Optical Camera Base Layer */
-        #opticalVideo {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: cover;
-            z-index: 1;
-        }
-
-        /* Thermal Data Overlay Layer */
         #thermalCanvas {
             position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            image-rendering: auto; 
-            z-index: 2;
-            opacity: 0.8;
-            mix-blend-mode: screen; /* Best blending for heatmaps over dark physical objects */
-            /* Transform handles Mirroring, Scale (FOV matching), and Translate (Parallax offset) */
+            transform: scaleX(1);
             transform-origin: center center;
-            transition: opacity 0.1s;
         }
         
         .scanlines {
@@ -152,7 +137,7 @@
         #status { margin-top: 10px; font-size: 12px; color: var(--danger); font-weight: bold; }
 
         .footer {
-            margin-top: 30px; width: 100%; max-width: 1400px; text-align: center; border-top: 1px solid var(--primary-dim);
+            margin-top: 30px; width: 100%; max-width: 1200px; text-align: center; border-top: 1px solid var(--primary-dim);
             padding-top: 10px; font-size: 12px; color: var(--primary-dim); letter-spacing: 3px; text-transform: uppercase;
         }
         .footer span { color: var(--primary); font-weight: bold; }
@@ -169,7 +154,7 @@
 
     <div class="header">
         <div>
-            <h2>SIGINT // SENSOR FUSION</h2>
+            <h2>SIGINT // GPU THERMAL DSP</h2>
             <div id="sysTime" class="sys-time">SYS.TIME: 00:00:00</div>
         </div>
         <div style="text-align: right;">
@@ -190,9 +175,7 @@
 
         <div class="panel video-panel">
             <div class="video-wrapper" id="videoWrapper">
-                <video id="opticalVideo" autoplay playsinline muted></video>
                 <canvas id="thermalCanvas" width="8" height="8"></canvas>
-                
                 <div class="scanlines"></div>
                 <div id="ch-h" class="ch-line"></div>
                 <div id="ch-v" class="ch-line"></div>
@@ -207,47 +190,6 @@
 
         <div class="panel controls-panel">
             <div class="control-group">
-                <label>OPTICAL SENSOR ARRAY</label>
-                <select id="selCamera">
-                    <option value="">-- SELECT HARDWARE --</option>
-                </select>
-            </div>
-
-            <div class="control-group">
-                <label>THERMAL OPACITY</label>
-                <div class="slider-row">
-                    <input type="range" id="rngOpacity" min="0" max="1" step="0.05" value="0.8">
-                    <span class="slider-val" id="valOpacity">80%</span>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <label>FOV SCALE (ZOOM)</label>
-                <div class="slider-row">
-                    <input type="range" id="rngScale" min="0.5" max="2.0" step="0.05" value="1.0">
-                    <span class="slider-val" id="valScale">1.00x</span>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <label>PARALLAX OFFSET X</label>
-                <div class="slider-row">
-                    <input type="range" id="rngOffsetX" min="-300" max="300" step="1" value="0">
-                    <span class="slider-val" id="valOffsetX">0px</span>
-                </div>
-            </div>
-
-            <div class="control-group" style="border-bottom: none;">
-                <label>PARALLAX OFFSET Y</label>
-                <div class="slider-row">
-                    <input type="range" id="rngOffsetY" min="-300" max="300" step="1" value="0">
-                    <span class="slider-val" id="valOffsetY">0px</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="panel controls-panel">
-            <div class="control-group">
                 <label>UNIT METRICS</label>
                 <select id="selUnit">
                     <option value="C">CELSIUS (°C)</option>
@@ -256,18 +198,27 @@
             </div>
 
             <div class="control-group">
-                <label>THERMAL FILTER</label>
+                <label>GPU SHADER PALETTE</label>
                 <select id="selPalette">
                     <option value="inferno">INFERNO (DEEP PURPLE)</option>
                     <option value="ironbow">IRONBOW (FLIR STANDARD)</option>
                     <option value="jet">THERMAL (JET RAINBOW)</option>
-                    <option value="grayscale">WHITE HOT</option>
+                    <option value="grayscale">WHITE HOT (FLIR)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>DSP INTERPOLATION</label>
+                <select id="selInterpolation">
+                    <option value="2">GPU CUBIC SPLINE (MAX QUALITY)</option>
+                    <option value="1">GPU BILINEAR (STANDARD)</option>
+                    <option value="0">RAW MATRIX (8x8)</option>
                 </select>
             </div>
 
             <div class="control-group" style="padding-top: 10px;">
                 <label class="checkbox-row">
-                    <input type="checkbox" id="chkAutoRange"> 
+                    <input type="checkbox" id="chkAutoRange" checked> 
                     [ AUTO-CALIBRATE RANGE ]
                 </label>
                 <label class="checkbox-row" style="margin-top: 5px;">
@@ -300,48 +251,28 @@
 
     <script>
         // DOM Elements
-        const btnUSB = document.getElementById('btnUSB');
-        const btnBLE = document.getElementById('btnBLE');
-        const uplinkControls = document.getElementById('uplinkControls');
-        const statusDiv = document.getElementById('status');
+        const btnUSB = document.getElementById('btnUSB'), btnBLE = document.getElementById('btnBLE');
+        const uplinkControls = document.getElementById('uplinkControls'), statusDiv = document.getElementById('status');
         
         const canvas = document.getElementById('thermalCanvas');
-        const ctx = canvas.getContext('2d');
-        const opticalVideo = document.getElementById('opticalVideo');
         const legendCanvas = document.getElementById('legendCanvas');
         const legendCtx = legendCanvas.getContext('2d');
         const sysTime = document.getElementById('sysTime');
         
         const videoWrapper = document.getElementById('videoWrapper');
         const targetReadout = document.getElementById('targetReadout');
-        const chH = document.getElementById('ch-h');
-        const chV = document.getElementById('ch-v');
+        const chH = document.getElementById('ch-h'), chV = document.getElementById('ch-v');
         
-        // Settings Elements
         const rngMin = document.getElementById('rngMin'), rngMax = document.getElementById('rngMax');
         const valMin = document.getElementById('valMin'), valMax = document.getElementById('valMax');
         const lblMin = document.getElementById('lblMin'), lblMax = document.getElementById('lblMax'), lblMid = document.getElementById('lblMid');
         const chkAutoRange = document.getElementById('chkAutoRange'), chkMirrorX = document.getElementById('chkMirrorX');
-        const selPalette = document.getElementById('selPalette'), selUnit = document.getElementById('selUnit');
-        const selCamera = document.getElementById('selCamera');
-        
-        // Calibration Elements
-        const rngOpacity = document.getElementById('rngOpacity'), valOpacity = document.getElementById('valOpacity');
-        const rngScale = document.getElementById('rngScale'), valScale = document.getElementById('valScale');
-        const rngOffsetX = document.getElementById('rngOffsetX'), valOffsetX = document.getElementById('valOffsetX');
-        const rngOffsetY = document.getElementById('rngOffsetY'), valOffsetY = document.getElementById('valOffsetY');
+        const selPalette = document.getElementById('selPalette'), selUnit = document.getElementById('selUnit'), selInterpolation = document.getElementById('selInterpolation');
 
         let minTemp = 20.0, maxTemp = 35.0;
-        const imgData = ctx.createImageData(8, 8);
-        let currentFrameTemps = new Array(64).fill(0);
+        let currentFrameTemps = new Float32Array(64);
         let bleBuffer = "";
 
-        // Transform State Variables
-        let tScale = 1.0;
-        let tOffsetX = 0;
-        let tOffsetY = 0;
-
-        // UUIDs
         const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
         const UART_TX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; 
         const UART_RX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; 
@@ -350,71 +281,125 @@
         if (!navigator.bluetooth) btnBLE.style.display = 'none';
 
         // ---------------------------------------------------------
-        // OPTICAL CAMERA INTEGRATION
+        // WEBGL 2.0 INITIALIZATION & SHADER PIPELINE
         // ---------------------------------------------------------
-        async function getCameras() {
-            try {
-                // Request initial permission to expose labels
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        const gl = canvas.getContext('webgl2');
+        if (!gl) {
+            alert('CRITICAL ERROR: WebGL 2.0 is not supported on this device. GPU DSP unavailable.');
+        }
+
+        const vsSource = `#version 300 es
+            in vec2 a_position;
+            out vec2 v_uv;
+            void main() {
+                v_uv = a_position * 0.5 + 0.5;
+                v_uv.y = 1.0 - v_uv.y; 
+                gl_Position = vec4(a_position, 0.0, 1.0);
+            }
+        `;
+
+        const fsSource = `#version 300 es
+            precision highp float;
+            in vec2 v_uv;
+            out vec4 outColor;
+
+            uniform sampler2D u_dataTex;
+            uniform sampler2D u_palTex;
+            uniform float u_min;
+            uniform float u_max;
+            uniform int u_interp;
+
+            float w(float x) {
+                float a = -0.5;
+                x = abs(x);
+                if (x <= 1.0) return (a + 2.0)*x*x*x - (a + 3.0)*x*x + 1.0;
+                else if (x < 2.0) return a*x*x*x - 5.0*a*x*x + 8.0*a*x - 4.0*a;
+                return 0.0;
+            }
+
+            float getBicubic(vec2 uv) {
+                vec2 texSize = vec2(8.0, 8.0);
+                vec2 p = uv * texSize - 0.5;
+                vec2 f = fract(p);
+                vec2 p0 = floor(p) + 0.5;
                 
-                selCamera.innerHTML = '<option value="">-- OPTICAL FEED OFF --</option>';
-                videoDevices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = device.label || `Camera ${selCamera.length}`;
-                    selCamera.appendChild(option);
-                });
-            } catch (err) {
-                console.error("Camera access denied or unavailable.");
+                float sum = 0.0;
+                for(float y = -1.0; y <= 2.0; y++) {
+                    for(float x = -1.0; x <= 2.0; x++) {
+                        vec2 coord = clamp((p0 + vec2(x, y)) / texSize, 0.0, 1.0);
+                        float val = texture(u_dataTex, coord).r;
+                        sum += val * w(x - f.x) * w(y - f.y);
+                    }
+                }
+                return sum;
             }
-        }
-        
-        selCamera.addEventListener('change', async (e) => {
-            const deviceId = e.target.value;
-            if (opticalVideo.srcObject) {
-                opticalVideo.srcObject.getTracks().forEach(track => track.stop());
-            }
-            if (deviceId) {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } });
-                opticalVideo.srcObject = stream;
-            } else {
-                opticalVideo.srcObject = null;
-            }
-        });
-        
-        getCameras(); // Init hardware scan
 
-        // ---------------------------------------------------------
-        // PARALLAX & FOV CALIBRATION UPDATES
-        // ---------------------------------------------------------
-        function updateTransform() {
-            tScale = parseFloat(rngScale.value);
-            tOffsetX = parseInt(rngOffsetX.value);
-            tOffsetY = parseInt(rngOffsetY.value);
-            
-            valScale.innerText = tScale.toFixed(2) + "x";
-            valOffsetX.innerText = tOffsetX + "px";
-            valOffsetY.innerText = tOffsetY + "px";
-            
-            // Build compound CSS Transform
-            let mirror = chkMirrorX.checked ? "scaleX(-1)" : "scaleX(1)";
-            let translate = `translate(${tOffsetX}px, ${tOffsetY}px)`;
-            let scale = `scale(${tScale})`;
-            
-            canvas.style.transform = `${translate} ${scale} ${mirror}`;
+            void main() {
+                float temp;
+                if (u_interp == 2) {
+                    temp = getBicubic(v_uv);
+                } else {
+                    temp = texture(u_dataTex, v_uv).r;
+                }
+                
+                float norm = clamp((temp - u_min) / (u_max - u_min), 0.0, 1.0);
+                vec3 col = texture(u_palTex, vec2(norm, 0.5)).rgb;
+                outColor = vec4(col, 1.0);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
         }
 
-        rngScale.addEventListener('input', updateTransform);
-        rngOffsetX.addEventListener('input', updateTransform);
-        rngOffsetY.addEventListener('input', updateTransform);
-        chkMirrorX.addEventListener('change', updateTransform);
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+        const positionLocation = gl.getAttribLocation(program, "a_position");
+        gl.enableVertexAttribArray(positionLocation);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+        const uMinLoc = gl.getUniformLocation(program, "u_min");
+        const uMaxLoc = gl.getUniformLocation(program, "u_max");
+        const uInterpLoc = gl.getUniformLocation(program, "u_interp");
         
-        rngOpacity.addEventListener('input', (e) => {
-            canvas.style.opacity = e.target.value;
-            valOpacity.innerText = Math.round(e.target.value * 100) + "%";
-        });
+        const uDataTexLoc = gl.getUniformLocation(program, "u_dataTex");
+        const uPalTexLoc = gl.getUniformLocation(program, "u_palTex");
+
+        const dataTex = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, dataTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 8, 8, 0, gl.RED, gl.FLOAT, new Float32Array(64));
+        gl.uniform1i(uDataTexLoc, 0);
+
+        const palTex = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, palTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.uniform1i(uPalTexLoc, 1);
+
 
         // ---------------------------------------------------------
         // COLOR DICTIONARY & UI
@@ -426,9 +411,7 @@
             grayscale: [{ pos: 0.00, color: [0, 0, 0] }, { pos: 1.00, color: [255, 255, 255] }]
         };
 
-        function getColor(v, paletteName) {
-            v = Math.max(0, Math.min(1, v));
-            const stops = PALETTES[paletteName];
+        function getInterpolatedColor(v, stops) {
             let lower = stops[0], upper = stops[stops.length - 1];
             for (let i = 0; i < stops.length - 1; i++) {
                 if (v >= stops[i].pos && v <= stops[i+1].pos) { lower = stops[i]; upper = stops[i+1]; break; }
@@ -437,9 +420,31 @@
             return [
                 Math.round(lower.color[0] + factor * (upper.color[0] - lower.color[0])),
                 Math.round(lower.color[1] + factor * (upper.color[1] - lower.color[1])),
-                Math.round(lower.color[2] + factor * (upper.color[2] - lower.color[2])),
-                255
+                Math.round(lower.color[2] + factor * (upper.color[2] - lower.color[2]))
             ];
+        }
+
+        function updatePalette() {
+            const stops = PALETTES[selPalette.value];
+            const palArray = new Uint8Array(256 * 3);
+            const legendData = legendCtx.createImageData(1, 256);
+            
+            for (let i = 0; i < 256; i++) {
+                let v = i / 255.0;
+                let c = getInterpolatedColor(v, stops);
+                
+                palArray[i*3] = c[0]; palArray[i*3+1] = c[1]; palArray[i*3+2] = c[2];
+                
+                let y = 255 - i;
+                legendData.data[y*4] = c[0]; legendData.data[y*4+1] = c[1]; legendData.data[y*4+2] = c[2]; legendData.data[y*4+3] = 255;
+            }
+            
+            legendCtx.putImageData(legendData, 0, 0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, palTex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 256, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, palArray);
+            renderWebGL();
         }
 
         setInterval(() => { sysTime.innerText = "SYS.TIME: " + new Date().toISOString().split('T')[1].split('.')[0] + "Z"; }, 1000);
@@ -453,12 +458,24 @@
             valMin.innerText = minTemp.toFixed(1); valMax.innerText = maxTemp.toFixed(1);
             lblMin.innerText = minTemp.toFixed(1) + unitStr; lblMax.innerText = maxTemp.toFixed(1) + unitStr;
             lblMid.innerText = ((minTemp + maxTemp) / 2).toFixed(1) + unitStr;
-            drawLegend();
+            renderWebGL();
         }
 
         rngMin.addEventListener('input', () => { chkAutoRange.checked = false; updateScaleUI(); });
         rngMax.addEventListener('input', () => { chkAutoRange.checked = false; updateScaleUI(); });
-        selPalette.addEventListener('change', drawLegend);
+        selPalette.addEventListener('change', updatePalette);
+
+        function updateInterpolation() {
+            const mode = parseInt(selInterpolation.value);
+            gl.useProgram(program);
+            gl.uniform1i(uInterpLoc, mode);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, dataTex);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mode === 1 ? gl.LINEAR : gl.NEAREST);
+            renderWebGL();
+        }
+        selInterpolation.addEventListener('change', updateInterpolation);
 
         selUnit.addEventListener('change', (e) => {
             if (e.target.value === 'F') {
@@ -472,19 +489,15 @@
             updateScaleUI();
         });
 
-        function drawLegend() {
-            const legendData = legendCtx.createImageData(1, 256);
-            for (let y = 0; y < 256; y++) {
-                let color = getColor(1.0 - (y / 255.0), selPalette.value);
-                let idx = y * 4;
-                legendData.data[idx] = color[0]; legendData.data[idx+1] = color[1]; legendData.data[idx+2] = color[2]; legendData.data[idx+3] = color[3];
-            }
-            legendCtx.putImageData(legendData, 0, 0);
-        }
 
         // ---------------------------------------------------------
-        // PARALLAX TARGET CALCULATION
+        // CSS TRANSFORM & TARGETING
         // ---------------------------------------------------------
+        canvas.style.transform = chkMirrorX.checked ? "scaleX(-1)" : "scaleX(1)";
+        chkMirrorX.addEventListener('change', (e) => {
+            canvas.style.transform = e.target.checked ? "scaleX(-1)" : "scaleX(1)";
+        });
+
         function updateTargetReadout(e) {
             const rect = videoWrapper.getBoundingClientRect();
             let clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -496,33 +509,9 @@
             chV.style.left = mouseX + 'px'; chH.style.top = mouseY + 'px';
             chV.style.display = 'block'; chH.style.display = 'block';
             
-            // Reverse calculate through the Parallax translation and FOV scale
-            // to find which thermal pixel the mouse is actually hovering over
-            let centerX = rect.width / 2;
-            let centerY = rect.height / 2;
-            
-            // 1. Remove translation offset
-            let rawX = mouseX - tOffsetX;
-            let rawY = mouseY - tOffsetY;
-            
-            // 2. Remove scaling factor relative to center origin
-            let unscaledX = centerX + (rawX - centerX) / tScale;
-            let unscaledY = centerY + (rawY - centerY) / tScale;
-            
-            // 3. Handle X-Axis mirroring
-            if (chkMirrorX.checked) unscaledX = rect.width - unscaledX;
-
-            // Bounds check after reversing calibration
-            if (unscaledX < 0 || unscaledX > rect.width || unscaledY < 0 || unscaledY > rect.height) {
-                targetReadout.style.display = 'none';
-                return;
-            }
-            
-            let pixelX = Math.floor((unscaledX / rect.width) * 8);
-            let pixelY = Math.floor((unscaledY / rect.height) * 8);
-            
-            pixelX = Math.max(0, Math.min(7, pixelX));
-            pixelY = Math.max(0, Math.min(7, pixelY));
+            let mappedX = chkMirrorX.checked ? rect.width - mouseX : mouseX;
+            let pixelX = Math.max(0, Math.min(7, Math.floor((mappedX / rect.width) * 8)));
+            let pixelY = Math.max(0, Math.min(7, Math.floor((mouseY / rect.height) * 8)));
             
             let targetTemp = currentFrameTemps[(pixelY * 8) + pixelX];
             let unitStr = selUnit.value === 'F' ? 'F' : 'C';
@@ -541,9 +530,51 @@
         videoWrapper.addEventListener('mouseleave', hideReadout);
         videoWrapper.addEventListener('touchend', hideReadout);
 
+
         // ---------------------------------------------------------
-        // UPLINK & DATA PIPELINE
+        // UPLINK & CORE RENDER PIPELINE
         // ---------------------------------------------------------
+        function renderWebGL() {
+            gl.useProgram(program);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, dataTex);
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 8, 8, gl.RED, gl.FLOAT, currentFrameTemps);
+            
+            gl.uniform1f(uMinLoc, minTemp);
+            gl.uniform1f(uMaxLoc, maxTemp);
+            
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        function processThermalData(csvString) {
+            const values = csvString.split(',');
+            if (values.length !== 64) return; 
+
+            const unit = selUnit.value;
+            let temps = [];
+            for (let i = 0; i < 64; i++) {
+                let t = parseFloat(values[i]);
+                if (!isNaN(t)) {
+                    if (unit === 'F') { t = (t * 9/5) + 32; }
+                    temps.push(t);
+                }
+            }
+            if (temps.length !== 64) return;
+            
+            currentFrameTemps.set(temps);
+
+            if (chkAutoRange.checked) {
+                let currentMin = Math.min(...temps); let currentMax = Math.max(...temps);
+                if (currentMax === currentMin) currentMax += 0.1;
+                minTemp = minTemp * 0.9 + currentMin * 0.1; maxTemp = maxTemp * 0.9 + currentMax * 0.1;
+                rngMin.value = minTemp; rngMax.value = maxTemp;
+                updateScaleUI(); 
+            } else {
+                renderWebGL();
+            }
+        }
+
         async function connectUSB() {
             try {
                 const port = await navigator.serial.requestPort();
@@ -611,41 +642,8 @@
             bleBuffer = lines[lines.length - 1]; 
         }
 
-        function processThermalData(csvString) {
-            const values = csvString.split(',');
-            if (values.length !== 64) return; 
-
-            const unit = selUnit.value;
-            let temps = [];
-            for (let i = 0; i < 64; i++) {
-                let t = parseFloat(values[i]);
-                if (!isNaN(t)) {
-                    if (unit === 'F') { t = (t * 9/5) + 32; }
-                    temps.push(t);
-                }
-            }
-            if (temps.length !== 64) return;
-            currentFrameTemps = [...temps];
-
-            if (chkAutoRange.checked) {
-                let currentMin = Math.min(...temps); let currentMax = Math.max(...temps);
-                if (currentMax === currentMin) currentMax += 0.1;
-                minTemp = minTemp * 0.9 + currentMin * 0.1; maxTemp = maxTemp * 0.9 + currentMax * 0.1;
-                rngMin.value = minTemp; rngMax.value = maxTemp;
-                updateScaleUI();
-            }
-
-            const palette = selPalette.value;
-            for (let i = 0; i < 64; i++) {
-                let color = getColor((temps[i] - minTemp) / (maxTemp - minTemp), palette);
-                let pixelIndex = i * 4;
-                imgData.data[pixelIndex] = color[0]; imgData.data[pixelIndex + 1] = color[1];
-                imgData.data[pixelIndex + 2] = color[2]; imgData.data[pixelIndex + 3] = color[3];
-            }
-            ctx.putImageData(imgData, 0, 0);
-        }
-
-        updateTransform();
+        updatePalette();
+        updateInterpolation();
         updateScaleUI();
         btnUSB.addEventListener('click', connectUSB);
         btnBLE.addEventListener('click', connectBLE);
