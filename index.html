@@ -218,7 +218,7 @@
             </div>
 
             <div class="control-group">
-                <label>GPU SHADER PALETTE</label>
+                <label>THERMAL COLOR PALETTE</label>
                 <select id="selPalette">
                     <option value="inferno">INFERNO (DEEP PURPLE)</option>
                     <option value="ironbow">IRONBOW (FLIR STANDARD)</option>
@@ -349,6 +349,8 @@
         let firstFrame = true;
         let bleBuffer = "";
         
+        // 8-bit Grayscale payload for GPU (Bypasses Android float restrictions)
+        let gpuPayload = new Uint8Array(64); 
         let activeTargetIndex = -1;
         let mouseRawX = 0, mouseRawY = 0;
 
@@ -366,7 +368,7 @@
         document.addEventListener('fullscreenchange', () => { btnFullscreen.innerText = document.fullscreenElement ? "[ EXIT FULLSCREEN ]" : "[ ENTER FULLSCREEN ]"; });
 
         // ---------------------------------------------------------
-        // WEBGL 2.0 SHADER PIPELINE
+        // WEBGL 2.0 SHADER PIPELINE (Temperature-Space Update)
         // ---------------------------------------------------------
         const gl = canvas.getContext('webgl2');
         if (!gl) alert('CRITICAL ERROR: WebGL 2.0 is not supported. GPU DSP unavailable.');
@@ -388,15 +390,14 @@
 
             uniform sampler2D u_dataTex;
             uniform sampler2D u_palTex;
-            uniform float u_min;
-            uniform float u_max;
             uniform int u_interp;
             
+            uniform float u_min;
+            uniform float u_max;
             uniform int u_iso_enabled;
             uniform float u_iso_min;
             uniform float u_iso_max;
 
-            // Catmull-Rom math for Bicubic
             float w(float x) {
                 float a = -0.5; x = abs(x);
                 if (x <= 1.0) return (a + 2.0)*x*x*x - (a + 3.0)*x*x + 1.0;
@@ -418,39 +419,27 @@
                 return sum;
             }
 
-            // Manual Bilinear fetch to bypass browser extension limitations
-            float getBilinear(vec2 uv) {
-                vec2 texSize = vec2(8.0, 8.0);
-                vec2 p = uv * texSize - 0.5;
-                vec2 f = fract(p);
-                vec2 p0 = floor(p) + 0.5;
-                
-                float c00 = texture(u_dataTex, clamp((p0 + vec2(0.0, 0.0)) / texSize, 0.0, 1.0)).r;
-                float c10 = texture(u_dataTex, clamp((p0 + vec2(1.0, 0.0)) / texSize, 0.0, 1.0)).r;
-                float c01 = texture(u_dataTex, clamp((p0 + vec2(0.0, 1.0)) / texSize, 0.0, 1.0)).r;
-                float c11 = texture(u_dataTex, clamp((p0 + vec2(1.0, 1.0)) / texSize, 0.0, 1.0)).r;
-                
-                float x0 = mix(c00, c10, f.x);
-                float x1 = mix(c01, c11, f.x);
-                return mix(x0, x1, f.y);
-            }
-
             void main() {
-                float temp;
-                if (u_interp == 2) temp = getBicubic(v_uv);
-                else if (u_interp == 1) temp = getBilinear(v_uv);
-                else temp = texture(u_dataTex, v_uv).r; // Mode 0 (Raw Matrix)
+                // Retrieve the normalized temperature (0.0 to 1.0) from the 8-bit texture
+                float tempNorm;
+                if (u_interp == 2) tempNorm = getBicubic(v_uv);
+                else tempNorm = texture(u_dataTex, v_uv).r; // Handles Native Bilinear and Nearest
                 
-                // Hardware Isotherm Blackout Bypass
+                // Mathematical clamping to prevent bicubic overshoots at harsh edges
+                tempNorm = clamp(tempNorm, 0.0, 1.0);
+
+                // Hardware Isotherm Blackout
                 if (u_iso_enabled == 1) {
-                    if (temp < u_iso_min || temp > u_iso_max) {
-                        outColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    // Reconstruct true physical temperature for accurate targeting
+                    float trueTemp = mix(u_min, u_max, tempNorm);
+                    if (trueTemp < u_iso_min || trueTemp > u_iso_max) {
+                        outColor = vec4(0.0, 0.0, 0.0, 1.0); // Pure Void
                         return;
                     }
                 }
                 
-                float norm = clamp((temp - u_min) / (u_max - u_min), 0.0, 1.0);
-                outColor = vec4(texture(u_palTex, vec2(norm, 0.5)).rgb, 1.0);
+                // Map the strictly smoothed temperature to the color palette
+                outColor = vec4(texture(u_palTex, vec2(tempNorm, 0.5)).rgb, 1.0);
             }
         `;
 
@@ -473,21 +462,26 @@
         gl.enableVertexAttribArray(positionLocation);
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-        const uMinLoc = gl.getUniformLocation(program, "u_min"), uMaxLoc = gl.getUniformLocation(program, "u_max");
-        const uInterpLoc = gl.getUniformLocation(program, "u_interp"), uDataTexLoc = gl.getUniformLocation(program, "u_dataTex");
+        const uInterpLoc = gl.getUniformLocation(program, "u_interp");
+        const uDataTexLoc = gl.getUniformLocation(program, "u_dataTex");
         const uPalTexLoc = gl.getUniformLocation(program, "u_palTex");
+        
+        const uMinLoc = gl.getUniformLocation(program, "u_min");
+        const uMaxLoc = gl.getUniformLocation(program, "u_max");
         const uIsoEnabledLoc = gl.getUniformLocation(program, "u_iso_enabled");
         const uIsoMinLoc = gl.getUniformLocation(program, "u_iso_min");
         const uIsoMaxLoc = gl.getUniformLocation(program, "u_iso_max");
 
+        // Single Channel 8-bit Texture (Universally Supported)
         const dataTex = gl.createTexture();
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 8, 8, 0, gl.RED, gl.FLOAT, new Float32Array(64));
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 8, 8, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, gpuPayload);
         gl.uniform1i(uDataTexLoc, 0);
 
+        // Palette Texture
         const palTex = gl.createTexture();
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, palTex);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -513,6 +507,7 @@
             else if (isManual) { iMin = parseFloat(rngIsoMin.value); iMax = parseFloat(rngIsoMax.value); }
             
             if (val !== 'none' && !isManual) { rngIsoMin.value = iMin; rngIsoMax.value = iMax; }
+            
             if (isManual) {
                 if(parseFloat(rngIsoMin.value) >= parseFloat(rngIsoMax.value)) {
                     rngIsoMin.value = parseFloat(rngIsoMax.value) - 1; iMin = parseFloat(rngIsoMin.value);
@@ -560,6 +555,7 @@
             const stops = PALETTES[selPalette.value];
             const palArray = new Uint8Array(256 * 3);
             const legendData = legendCtx.createImageData(1, 256);
+            
             for (let i = 0; i < 256; i++) {
                 let c = getInterpolatedColor(i / 255.0, stops);
                 palArray[i*3] = c[0]; palArray[i*3+1] = c[1]; palArray[i*3+2] = c[2];
@@ -567,6 +563,7 @@
                 legendData.data[y*4] = c[0]; legendData.data[y*4+1] = c[1]; legendData.data[y*4+2] = c[2]; legendData.data[y*4+3] = 255;
             }
             legendCtx.putImageData(legendData, 0, 0);
+            
             gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, palTex);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 256, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, palArray);
             if(!firstFrame) renderWebGL();
@@ -583,6 +580,11 @@
             valMin.innerText = minTemp.toFixed(1); valMax.innerText = maxTemp.toFixed(1);
             lblMin.innerText = minTemp.toFixed(1) + unitStr; lblMax.innerText = maxTemp.toFixed(1) + unitStr;
             lblMid.innerText = ((minTemp + maxTemp) / 2).toFixed(1) + unitStr;
+            
+            gl.useProgram(program);
+            gl.uniform1f(uMinLoc, minTemp);
+            gl.uniform1f(uMaxLoc, maxTemp);
+
             if(!firstFrame) renderWebGL();
         }
 
@@ -593,7 +595,11 @@
         rngDenoise.addEventListener('input', (e) => { valDenoise.innerText = Math.round(e.target.value * 100) + "%"; });
 
         function updateInterpolation() {
-            gl.useProgram(program); gl.uniform1i(uInterpLoc, parseInt(selInterpolation.value));
+            const mode = parseInt(selInterpolation.value);
+            gl.useProgram(program); gl.uniform1i(uInterpLoc, mode);
+            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dataTex);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mode === 1 ? gl.LINEAR : gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mode === 1 ? gl.LINEAR : gl.NEAREST);
             if(!firstFrame) renderWebGL();
         }
         selInterpolation.addEventListener('change', updateInterpolation);
@@ -617,7 +623,7 @@
         chkMirrorX.addEventListener('change', (e) => { canvas.style.transform = e.target.checked ? "scaleX(-1)" : "scaleX(1)"; });
 
         // ---------------------------------------------------------
-        // TARGETING & RENDERING LOGIC
+        // TARGETING LOGIC
         // ---------------------------------------------------------
         function calculateIndexFromMouse(x, y, rect) {
             let mappedX = chkMirrorX.checked ? rect.width - x : x;
@@ -683,13 +689,27 @@
             applyMarker(coldMarker, minIdx, minT, '-');
         }
 
+        // ---------------------------------------------------------
+        // TRUE TEMPERATURE-SPACE RENDER PIPELINE
+        // ---------------------------------------------------------
         function renderWebGL() {
+            if (firstFrame) return;
+
+            // 1. Pack telemetry into 8-bit unsigned bytes representing normalized scale 
+            for (let i = 0; i < 64; i++) {
+                let temp = currentFrameTemps[i];
+                let range = maxTemp - minTemp;
+                let norm = (range <= 0) ? 0 : Math.max(0, Math.min(1, (temp - minTemp) / range));
+                gpuPayload[i] = Math.round(norm * 255);
+            }
+
+            // 2. Upload byte array to GPU
             gl.useProgram(program);
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, dataTex);
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 8, 8, gl.RED, gl.FLOAT, currentFrameTemps);
-            gl.uniform1f(uMinLoc, minTemp);
-            gl.uniform1f(uMaxLoc, maxTemp);
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 8, 8, gl.LUMINANCE, gl.UNSIGNED_BYTE, gpuPayload);
+            
+            // 3. Execute
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             if (activeTargetIndex !== -1) {
@@ -729,7 +749,12 @@
 
             if (chkAutoRange.checked) {
                 let currentMin = Math.min(...currentFrameTemps); let currentMax = Math.max(...currentFrameTemps);
-                if (currentMax === currentMin) currentMax += 0.1;
+                
+                // Noise floor buffer to prevent static washout when aimed at a blank wall
+                if ((currentMax - currentMin) < 3.0) {
+                    currentMax += 1.5; currentMin -= 1.5;
+                }
+                
                 minTemp = minTemp * 0.9 + currentMin * 0.1; maxTemp = maxTemp * 0.9 + currentMax * 0.1;
                 rngMin.value = minTemp; rngMax.value = maxTemp;
                 updateScaleUI(); 
